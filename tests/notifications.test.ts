@@ -1,3 +1,4 @@
+import { sendWhatsApp } from "../src/lib/whatsapp-delivery";
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { mkdtemp, readFile, writeFile, stat, rm } from "node:fs/promises";
@@ -8,7 +9,6 @@ import {
   buildWhatsAppLink,
   renderMessage,
   validateTemplate,
-  sendWhatsApp,
 } from "../src/lib/whatsapp";
 import { isPushEndpoint, pushSubscriptionSchema } from "../src/lib/push";
 import { demoData } from "../src/lib/demo";
@@ -16,7 +16,7 @@ import { appointmentTasks, planDailyTasks } from "../src/lib/follow-up-plan";
 import { buildMessages } from "../src/lib/notification-builders";
 import { dayKey } from "../src/lib/utils";
 
-test("wa.me normaliza Colombia y codifica texto, saltos y variables sin reinterpretar sus valores", () => {
+test("wa.me normaliza Colombia y codifica texto, saltos y variables sin reinterpretar sus valores", async () => {
   const url = new URL(
     buildWhatsAppLink(
       "+57 (300) 123-4567",
@@ -40,7 +40,14 @@ test("wa.me normaliza Colombia y codifica texto, saltos y variables sin reinterp
   );
   assert.ok(url.searchParams.get("text")?.includes("?x=1&y=2"));
   assert.equal(
-    sendWhatsApp("3001234567", "Hola {nombre}", { nombre: "Laura" }).mode,
+    (
+      await sendWhatsApp({
+        phone: "3001234567",
+        template: "Hola {nombre}",
+        data: { nombre: "Laura" },
+        messageId: "test-message",
+      })
+    ).mode,
     "link",
   );
 });

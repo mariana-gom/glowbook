@@ -16,7 +16,8 @@ import {
   appointmentWhatsAppData,
   publicOrigin,
 } from "@/lib/appointment-contact";
-import { defaultWhatsAppMessages, sendWhatsApp } from "@/lib/whatsapp";
+import { sendWhatsApp, type WhatsAppDelivery } from "@/lib/whatsapp-delivery";
+import { defaultWhatsAppMessages } from "@/lib/whatsapp";
 const inputSchema = z.union([
   z.object({ taskId: z.uuid() }),
   z.object({
@@ -26,7 +27,7 @@ const inputSchema = z.union([
 ]);
 export async function openTaskWhatsApp(
   input: z.infer<typeof inputSchema>,
-): Promise<{ url?: string; error?: string; demo?: boolean }> {
+): Promise<{ delivery?: WhatsAppDelivery; error?: string; demo?: boolean }> {
   const parsed = inputSchema.safeParse(input);
   if (!parsed.success) return { error: "Acción inválida." };
   const access = await panelAccess();
@@ -73,18 +74,23 @@ export async function openTaskWhatsApp(
           codigo: "",
         };
     return {
-      url: sendWhatsApp(client.phone, defaultWhatsAppMessages[kind], {
-        ...data,
-        enlace_reprogramar: link,
-        enlace: link,
-      }).url,
+      delivery: await sendWhatsApp({
+        phone: client.phone,
+        template: defaultWhatsAppMessages[kind],
+        data: {
+          ...data,
+          enlace_reprogramar: link,
+          enlace: link,
+        },
+        messageId: lookup?.id ?? `${a?.id}:${kind}`,
+      }),
       demo: true,
     };
   }
   const { db, close } = database(),
     t = tenant(access.salonId);
   try {
-    const url = await db.transaction(async (tx) => {
+    const delivery = await db.transaction(async (tx) => {
       const [salon] = await tx
         .select()
         .from(S.salons)
@@ -169,7 +175,7 @@ export async function openTaskWhatsApp(
       return link;
     });
     revalidatePath("/panel", "layout");
-    return { url };
+    return { delivery };
   } catch (e) {
     return {
       error:

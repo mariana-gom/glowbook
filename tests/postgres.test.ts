@@ -309,10 +309,12 @@ test(
                 ),
               );
             assert.ok(task);
-            const url = await db.transaction((tx) =>
+            const delivery = await db.transaction((tx) =>
               taskWhatsApp(tx as unknown as Transaction, d.salon, task),
             );
-            assert.equal(new URL(url).origin, "https://wa.me");
+            assert.equal(delivery.mode, "link");
+            if (delivery.mode === "link")
+              assert.equal(new URL(delivery.url).origin, "https://wa.me");
             const [updated] = await db
               .select()
               .from(S.appointments)

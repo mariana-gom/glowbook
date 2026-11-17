@@ -82,7 +82,7 @@ También se admiten `{salon}` y el alias `{enlace}` para compatibilidad. Los val
 - Al tocar un pendiente, una Server Action comprueba rol, salón, versión de la cita y consentimiento cuando corresponde. Guarda `marked_sent` con fecha y usuaria; luego abre el chat.
 - “Marcado enviado” significa **acción registrada por la usuaria**, no entrega verificada. Si cierra el chat sin enviar, el sistema no puede saberlo. No se confirma entrega ni lectura en WhatsApp.
 - Confirmar desde el panel registra la confirmación de la dueña. Abrir el chat de la clienta no la confirma en nombre del negocio.
-- `sendWhatsApp()` es un adaptador desacoplado que devuelve `{ mode: 'link', url }`. Un plan premium futuro puede añadir un proveedor oficial sin reescribir las plantillas. No hay proveedor API implementado ni habilitado.
+- `sendWhatsApp()` vive en `src/lib/whatsapp-delivery.ts` y solo se invoca desde el servidor. Recibe una clave estable del mensaje y devuelve `{ mode: 'link', url }`; sus consumidoras también aceptan `{ mode: 'sent', providerId }`. Un plan premium futuro puede sustituir el adaptador sin reescribir plantillas ni botones. No hay proveedor API implementado ni habilitado.
 
 ### Pendientes de hoy
 

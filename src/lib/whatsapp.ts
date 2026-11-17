@@ -67,14 +67,3 @@ export function buildWhatsAppLink(
 ) {
   return `https://wa.me/${normalizeColombianPhone(phone)}?text=${encodeURIComponent(renderMessage(template, data))}`;
 }
-// Adaptador manual. Un proveedor premium futuro puede devolver otro resultado sin tocar las plantillas.
-export function sendWhatsApp(
-  phone: string,
-  template: string,
-  data: WhatsAppData,
-) {
-  return {
-    mode: "link" as const,
-    url: buildWhatsAppLink(phone, template, data),
-  };
-}

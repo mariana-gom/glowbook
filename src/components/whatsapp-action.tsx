@@ -30,14 +30,18 @@ export function WhatsAppAction({
     start(async () => {
       try {
         const result = await openTaskWhatsApp(input);
-        if (!result.url) {
+        if (!result.delivery) {
           popup?.close();
           setError(result.error ?? "No fue posible abrir WhatsApp.");
           return;
         }
         setDone(true);
-        if (popup) popup.location.replace(result.url);
-        else window.location.assign(result.url);
+        if (result.delivery.mode === "link") {
+          if (popup) popup.location.replace(result.delivery.url);
+          else window.location.assign(result.delivery.url);
+        } else {
+          popup?.close();
+        }
         if (!result.demo) router.refresh();
       } catch {
         popup?.close();

@@ -6,11 +6,8 @@ import { demoData, demoId } from "./demo";
 import { dayKey, bogotaDate } from "./utils";
 import { planDailyTasks, appointmentTasks } from "./follow-up-plan";
 import { appointmentWhatsAppData, publicOrigin } from "./appointment-contact";
-import {
-  defaultWhatsAppMessages,
-  sendWhatsApp,
-  type WhatsAppData,
-} from "./whatsapp";
+import { sendWhatsApp } from "./whatsapp-delivery";
+import { defaultWhatsAppMessages, type WhatsAppData } from "./whatsapp";
 export type FollowUpItem = {
   id: string;
   kind: S.FollowUpKind;
@@ -349,11 +346,13 @@ export async function taskWhatsApp(
         .set({ ownerConfirmedAt: new Date() })
         .where(t.where(S.appointments, eq(S.appointments.id, appointment.id)));
   }
-  return sendWhatsApp(
-    client.phone,
-    { ...defaultWhatsAppMessages, ...salon.settings.whatsappMessages }[
-      task.kind
-    ],
+  return sendWhatsApp({
+    phone: client.phone,
+    template: {
+      ...defaultWhatsAppMessages,
+      ...salon.settings.whatsappMessages,
+    }[task.kind],
     data,
-  ).url;
+    messageId: task.id,
+  });
 }

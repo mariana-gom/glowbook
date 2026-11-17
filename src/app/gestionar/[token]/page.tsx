@@ -7,7 +7,7 @@ import * as S from "@/db/schema";
 import { ManageAppointment } from "@/components/manage-appointment";
 import { Brand } from "@/components/brand";
 import { appointmentWhatsAppData } from "@/lib/appointment-contact";
-import { defaultWhatsAppMessages, sendWhatsApp } from "@/lib/whatsapp";
+import { defaultWhatsAppMessages, buildWhatsAppLink } from "@/lib/whatsapp";
 import { Button } from "@/components/ui/button";
 import { prettyDate, clock, money } from "@/lib/utils";
 export const dynamic = "force-dynamic";
@@ -52,7 +52,7 @@ export default async function Manage({
       .select()
       .from(S.staff)
       .where(t.where(S.staff, eq(S.staff.id, a.staffId)));
-    const whatsappUrl = sendWhatsApp(
+    const whatsappUrl = buildWhatsAppLink(
       salon.settings.whatsapp,
       { ...defaultWhatsAppMessages, ...salon.settings.whatsappMessages }
         .clientConfirmation,
@@ -63,7 +63,7 @@ export default async function Manage({
         professional?.name ?? "Tu profesional",
         token,
       ),
-    ).url;
+    );
     return (
       <main id="contenido" className="mx-auto max-w-xl px-5 py-10">
         <Brand />
