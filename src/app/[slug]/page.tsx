@@ -111,7 +111,8 @@ export default async function SalonPage({
               src={settings.heroUrl || "/images/salon.jpg"}
               alt={`El espacio de ${salon.name}`}
               fill
-              priority
+              loading="eager"
+              fetchPriority="high"
               sizes="(max-width: 768px) 100vw, 50vw"
               className="object-cover"
             />

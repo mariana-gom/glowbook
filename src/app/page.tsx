@@ -96,7 +96,8 @@ export default function Home() {
                 src="/images/salon.jpg"
                 alt="Interior luminoso de un salón de belleza con espejos y plantas"
                 fill
-                priority
+                loading="eager"
+                fetchPriority="high"
                 sizes="(max-width: 768px) 100vw, 50vw"
                 className="object-cover"
               />
@@ -184,7 +185,7 @@ export default function Home() {
                   </div>
                   <span
                     aria-hidden="true"
-                    className="serif text-xl text-border"
+                    className="serif text-xl text-muted-foreground"
                   >
                     0{i + 1}
                   </span>
