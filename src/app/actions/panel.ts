@@ -466,6 +466,7 @@ export async function saveAdmin(_: FormState, f: FormData): Promise<FormState> {
                 "gestionar",
                 "privacidad",
                 "nails-glam-studio",
+                "mariana-gomez",
               ].includes(v),
           )
           .parse(text(f, "slug"));

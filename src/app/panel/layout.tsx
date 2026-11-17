@@ -1,3 +1,4 @@
+import { DeveloperCredit } from "@/components/developer-credit";
 import type { CSSProperties } from "react";
 import Link from "next/link";
 import { cookies, headers } from "next/headers";
@@ -86,7 +87,9 @@ export default async function PanelLayout({
           {children}
         </main>
         <footer className="flex flex-wrap justify-between gap-3 border-t border-border px-9 py-5 text-[9px] muted">
-          <span>GlowBook · Hecho para que tu negocio florezca.</span>
+          <span>
+            GlowBook · <DeveloperCredit />
+          </span>
           <span>Hora de Bogotá · Pesos colombianos</span>
         </footer>
       </div>

@@ -158,7 +158,11 @@ test("PWA tiene manifest, service worker y pantalla segura sin conexión", async
   });
   await page.reload();
   const cached = await page.evaluate(async () => {
-    const cache = await caches.open("glowbook-shell-v1");
+    const name = (await caches.keys()).find((key) =>
+      key.startsWith("glowbook-shell-"),
+    );
+    if (!name) throw new Error("No se preparó la pantalla sin conexión.");
+    const cache = await caches.open(name);
     return (await cache.keys()).map((request) => new URL(request.url).pathname);
   });
   expect(cached.sort()).toEqual(

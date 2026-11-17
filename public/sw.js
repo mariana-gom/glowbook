@@ -1,5 +1,5 @@
 /* Solo almacena la pantalla pública sin conexión; nunca la agenda ni respuestas autenticadas. */
-const CACHE = "glowbook-shell-v1";
+const CACHE = "glowbook-shell-v2";
 self.addEventListener("install", (event) => {
   event.waitUntil(
     caches

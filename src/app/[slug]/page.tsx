@@ -1,3 +1,4 @@
+import { DeveloperCredit } from "@/components/developer-credit";
 import type { CSSProperties } from "react";
 import { notFound } from "next/navigation";
 import Link from "next/link";
@@ -338,6 +339,7 @@ export default async function SalonPage({
             Reservas con{" "}
             <span className="serif text-base text-foreground">glowbook.</span>
           </Link>
+          <DeveloperCredit />
           <Link href="/privacidad">Tratamiento de datos</Link>
         </div>
       </footer>

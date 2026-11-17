@@ -1,5 +1,7 @@
 # GlowBook
 
+**Diseño y desarrollo: [Mariana Gomez](src/app/mariana-gomez/page.tsx).** Crédito público en la aplicación: `/mariana-gomez`.
+
 Una plataforma para salones de belleza en Colombia, en un solo proyecto Next.js App Router + TypeScript. PostgreSQL en Neon, Drizzle, Better Auth, Tailwind, componentes shadcn/ui, Resend y Web Push estándar con VAPID. Idioma español, hora `America/Bogota` y valores enteros en COP.
 
 **WhatsApp funciona mediante enlaces `wa.me`.** No hay llamadas a WhatsApp Business API, tokens de Meta, bots ni librerías no oficiales. El navegador prepara el texto; una persona pulsa Enviar en WhatsApp.

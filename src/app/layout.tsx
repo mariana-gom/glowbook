@@ -1,12 +1,20 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
+import { developer } from "@/lib/credits";
 export const maxDuration = 300;
 export const metadata: Metadata = {
+  authors: [{ name: developer.name, url: developer.href }],
+  creator: developer.name,
+  publisher: developer.name,
   title: {
     default: "GlowBook · Tu negocio, en su mejor momento",
     template: "%s · GlowBook",
   },
-  appleWebApp: { capable: true, statusBarStyle: "default", title: "GlowBook" },
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "GlowBook · Mariana Gomez",
+  },
   icons: { apple: "/icons/apple-touch-icon.png" },
   description:
     "Reservas sencillas y una agenda que trabaja por ti. La plataforma para salones de uñas y belleza en Colombia.",

@@ -1,3 +1,4 @@
+import { DeveloperCredit } from "@/components/developer-credit";
 import Link from "next/link";
 import Image from "next/image";
 import {
@@ -306,7 +307,7 @@ export default function Home() {
         <div className="page-width flex flex-wrap items-center justify-between gap-5">
           <Brand small />
           <p className="mb-0 text-xs muted">
-            Hecho con cariño para los negocios de belleza en Colombia.
+            <DeveloperCredit />
           </p>
           <Link href="/privacidad" className="text-xs muted">
             Privacidad

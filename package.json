@@ -59,5 +59,6 @@
   "overrides": {
     "zod": "^4.6.7",
     "esbuild": "^0.28.2"
-  }
+  },
+  "author": "Mariana Gomez"
 }

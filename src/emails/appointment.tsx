@@ -1,3 +1,4 @@
+import { developer } from "@/lib/credits";
 import {
   Body,
   Container,
@@ -39,6 +40,16 @@ export function AppointmentEmail({
               ? "Notificación de tu salón. Inicia sesión para consultar la agenda de"
               : "Este enlace es privado. Recibes este mensaje porque reservaste una cita en"}{" "}
             {salon}.
+          </Text>
+          <Text style={{ fontSize: 11, color: "#6c6267" }}>
+            GlowBook · Desarrollado por{" "}
+            <Link
+              href={new URL(developer.href, url).href}
+              style={{ color: "#754c60" }}
+            >
+              {developer.name}
+            </Link>
+            .
           </Text>
         </Container>
       </Body>

@@ -1,10 +1,11 @@
+import { developer } from "@/lib/credits";
 import type { MetadataRoute } from "next";
 export default function manifest(): MetadataRoute.Manifest {
   return {
     id: "/",
-    name: "GlowBook · Mi salón",
+    name: `GlowBook · ${developer.name}`,
     short_name: "GlowBook",
-    description: "Tu agenda, tus pendientes y tu equipo en un solo lugar.",
+    description: `Tu agenda, tus pendientes y tu equipo en un solo lugar. Desarrollado por ${developer.name}.`,
     start_url: "/panel",
     scope: "/",
     display: "standalone",
