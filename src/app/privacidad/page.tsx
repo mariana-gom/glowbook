@@ -22,8 +22,10 @@ export default function Privacy() {
       </p>
       <p>
         El servicio utiliza Neon para almacenar datos, Vercel para alojar la
-        plataforma, Resend para correo y, cuando está habilitado, Meta para
-        WhatsApp. El enlace de gestión de tu cita es privado; evita compartirlo.
+        plataforma, Resend para correo y los servicios de notificaciones del
+        navegador para Web Push. WhatsApp recibe los datos del mensaje cuando
+        decides abrir su enlace y enviarlo desde el chat. El enlace de gestión
+        de tu cita es privado; evita compartirlo.
       </p>
       <p className="rounded-xl bg-muted p-5 text-sm">
         Esta versión es un MVP. Antes de recibir reservas reales, cada salón

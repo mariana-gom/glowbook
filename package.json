@@ -14,7 +14,8 @@
     "admin:create": "tsx scripts/create-admin.ts",
     "test": "tsx --test tests/*.test.ts",
     "test:e2e": "playwright test",
-    "format": "prettier --write src scripts tests *.ts *.json README.md docs/*.md"
+    "format": "prettier --write src scripts tests *.ts *.json README.md docs/*.md",
+    "push:keys": "tsx scripts/generate-vapid.ts"
   },
   "dependencies": {
     "@better-auth/drizzle-adapter": "^1.7.25",
@@ -33,6 +34,7 @@
     "resend": "^6.38.1",
     "server-only": "^0.0.1",
     "tailwind-merge": "^3.7.0",
+    "web-push": "^4.0.0",
     "ws": "^8.23.0",
     "zod": "^4.6.7"
   },
@@ -43,6 +45,7 @@
     "@types/pg": "^8.23.1",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@types/web-push": "^3.6.4",
     "@types/ws": "^8.18.2",
     "drizzle-kit": "^0.31.11",
     "eslint": "^9",

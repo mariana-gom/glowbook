@@ -6,6 +6,9 @@ import { tenant } from "@/db/tenant";
 import * as S from "@/db/schema";
 import { ManageAppointment } from "@/components/manage-appointment";
 import { Brand } from "@/components/brand";
+import { appointmentWhatsAppData } from "@/lib/appointment-contact";
+import { defaultWhatsAppMessages, sendWhatsApp } from "@/lib/whatsapp";
+import { Button } from "@/components/ui/button";
 import { prettyDate, clock, money } from "@/lib/utils";
 export const dynamic = "force-dynamic";
 export const metadata = {
@@ -45,6 +48,22 @@ export default async function Manage({
           eq(S.appointmentServices.appointmentId, a.id),
         ),
       );
+    const [professional] = await db
+      .select()
+      .from(S.staff)
+      .where(t.where(S.staff, eq(S.staff.id, a.staffId)));
+    const whatsappUrl = sendWhatsApp(
+      salon.settings.whatsapp,
+      { ...defaultWhatsAppMessages, ...salon.settings.whatsappMessages }
+        .clientConfirmation,
+      appointmentWhatsAppData(
+        salon,
+        a,
+        services.map((s) => s.name),
+        professional?.name ?? "Tu profesional",
+        token,
+      ),
+    ).url;
     return (
       <main id="contenido" className="mx-auto max-w-xl px-5 py-10">
         <Brand />
@@ -54,7 +73,7 @@ export default async function Manage({
           <span className={`badge ${a.status}`}>
             {
               {
-                confirmed: "Confirmada",
+                confirmed: a.ownerConfirmedAt ? "Confirmada" : "Reservada",
                 completed: "Completada",
                 cancelled: "Cancelada",
                 no_show: "Inasistencia",
@@ -70,6 +89,19 @@ export default async function Manage({
           <p className="mb-2 text-sm">{salon.settings.address}</p>
           <p className="serif mb-0 mt-5 text-2xl">{money(a.total)}</p>
         </div>
+        {salon.active && a.status === "confirmed" && (
+          <div className="mb-7">
+            <Button asChild>
+              <a href={whatsappUrl} target="_blank" rel="noreferrer">
+                Confirmar por WhatsApp
+              </a>
+            </Button>
+            <p className="mt-3 text-xs muted">
+              Tu espacio ya está reservado. Este botón abre el chat del salón;
+              pulsa Enviar en WhatsApp para compartir los datos de tu cita.
+            </p>
+          </div>
+        )}
         <p className="mb-6 text-xs muted">
           Los cambios requieren {salon.settings.cancellationHours} horas de
           anticipación. Guarda este enlace en privado: permite gestionar tu

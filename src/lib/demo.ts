@@ -1,3 +1,4 @@
+import { defaultWhatsAppMessages } from "./whatsapp";
 import { createHash } from "node:crypto";
 import type * as S from "@/db/schema";
 import { bogotaDate, dayKey } from "./utils";
@@ -19,12 +20,14 @@ export const defaultSettings: S.SalonSettings = {
   mapsUrl: "https://www.google.com/maps/search/?api=1&query=Chico+Bogota",
   heroUrl: "/images/salon.jpg",
   emailEnabled: true,
-  whatsappEnabled: false,
+  ownerEmailEnabled: true,
+  reactivationDays: 60,
+  whatsappMessages: defaultWhatsAppMessages,
   messages: {
     confirmation:
-      "¡Hola, {nombre}! Tu momento en {salon} está reservado para {fecha}. Te esperamos. {enlace}",
+      "¡Hola, {nombre}! Tu cita {codigo} en {salon} está reservada: {servicio}, el {fecha} a las {hora}, con {profesional}. Cambios: {enlace_reprogramar}",
     reminder24:
-      "Tu cita en {salon} es mañana: {fecha}. Organiza tu visita aquí: {enlace}",
+      "Tu cita en {salon} es mañana: {fecha} a las {hora}, para {servicio}, con {profesional}. Gestiona tu visita: {enlace_reprogramar}",
     reminder2: "¡Ya casi! Te esperamos en {salon} el {fecha}. {enlace}",
     thanks:
       "Gracias por visitarnos, {nombre}. Cuéntanos cómo estuvo tu experiencia: {enlace}",
@@ -34,7 +37,6 @@ export const defaultSettings: S.SalonSettings = {
     reactivation:
       "Te extrañamos, {nombre}. Vuelve a consentirte en {salon}: {enlace}",
   },
-  whatsappTemplates: {},
 };
 const catalog: [string, string, number, number, number | null][] = [
   ["Manicure tradicional", "Manicure", 40, 25000, 7],
@@ -95,7 +97,7 @@ export function demoData(now = new Date()): SalonData {
     logoUrl: null,
     primaryColor: "#754c60",
     accentColor: "#b79867",
-    settings: defaultSettings,
+    settings: { ...defaultSettings, reactivationDays: 21 },
     createdAt: new Date("2026-01-01T12:00:00Z"),
   };
   const categories = [
@@ -189,9 +191,10 @@ export function demoData(now = new Date()): SalonData {
     name: `${firstNames[i % 20]} ${lastNames[Math.floor(i / 20)]}`,
     phone: `+57300000${String(i).padStart(4, "0")}`,
     email: `clienta${i}@example.invalid`,
-    birthday: null,
+    birthday:
+      i % 20 === 0 ? `${1985 + (i % 20)}-${dayKey(now).slice(5)}` : null,
     consentAt: now,
-    marketingConsent: false,
+    marketingConsent: i % 3 !== 0,
     createdAt: new Date(now.getTime() - (i + 60) * 86400000),
   }));
   const appointments: SalonData["appointments"] = [];
@@ -216,7 +219,10 @@ export function demoData(now = new Date()): SalonData {
                 ? "cancelled"
                 : "completed"
             : "confirmed";
-        const client = clients[d > -7 ? n % 100 : n % 80];
+        const client =
+          clients[
+            d < -22 ? 90 + (n % 10) : d >= 0 ? n % 70 : d > -7 ? n % 90 : n % 80
+          ];
         appointments.push({
           id,
           salonId,
@@ -236,8 +242,12 @@ export function demoData(now = new Date()): SalonData {
             .update(`not-a-public-token-${n}`)
             .digest("hex"),
           version: 1,
+          ownerConfirmedAt:
+            status === "confirmed" && n % 3 === 0
+              ? null
+              : new Date(+startsAt - 86400000),
           requestKey: `seed-${n}`,
-          createdAt: new Date(+startsAt - 3 * 86400000),
+          createdAt: new Date(Math.min(+now, +startsAt - 3 * 86400000)),
         });
         appointmentServices.push({
           id: demoId(`as-${n}`),

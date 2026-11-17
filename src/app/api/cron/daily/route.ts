@@ -1,11 +1,15 @@
 import { validCron } from "@/lib/cron";
-// La Fase 2 se habilita solo después de validar el MVP y el consentimiento de campañas.
+import { processDaily } from "@/lib/daily";
+export const runtime = "nodejs";
+export const maxDuration = 300;
 export async function GET(request: Request) {
   if (!validCron(request))
     return Response.json({ error: "No autorizado" }, { status: 401 });
-  return Response.json({
-    phase: 1,
-    campaignsEnabled: false,
-    message: "Reactivación, cumpleaños y mantenimiento pendientes de Fase 2.",
-  });
+  if (!process.env.DATABASE_URL)
+    return Response.json(
+      { error: "Configura Neon para ejecutar el cron." },
+      { status: 503 },
+    );
+  return Response.json(await processDaily());
 }
+export const POST = GET;

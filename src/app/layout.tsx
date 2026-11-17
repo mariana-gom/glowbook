@@ -1,12 +1,20 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import "./globals.css";
+export const maxDuration = 300;
 export const metadata: Metadata = {
   title: {
     default: "GlowBook · Tu negocio, en su mejor momento",
     template: "%s · GlowBook",
   },
+  appleWebApp: { capable: true, statusBarStyle: "default", title: "GlowBook" },
+  icons: { apple: "/icons/apple-touch-icon.png" },
   description:
     "Reservas sencillas y una agenda que trabaja por ti. La plataforma para salones de uñas y belleza en Colombia.",
+};
+export const viewport: Viewport = {
+  themeColor: "#754c60",
+  width: "device-width",
+  initialScale: 1,
 };
 export default function RootLayout({
   children,

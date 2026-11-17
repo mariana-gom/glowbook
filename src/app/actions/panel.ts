@@ -1,4 +1,16 @@
 "use server";
+import { after } from "next/server";
+import {
+  ensureAppointmentTasks,
+  invalidateAppointmentTasks,
+} from "@/lib/follow-ups";
+import { enqueueTeamNotifications } from "@/lib/notification-builders";
+import { flushMessages } from "@/lib/messages";
+import {
+  defaultWhatsAppMessages,
+  validateTemplate,
+  normalizeColombianPhone,
+} from "@/lib/whatsapp";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { eq, inArray, sql } from "drizzle-orm";
@@ -243,10 +255,7 @@ export async function savePanel(_: FormState, f: FormData): Promise<FormState> {
         address: short(f, "address", 300),
         city: short(f, "city"),
         description: short(f, "description", 1000),
-        whatsapp: z
-          .string()
-          .regex(/^57\d{10}$/)
-          .parse(text(f, "whatsapp")),
+        whatsapp: normalizeColombianPhone(text(f, "whatsapp")),
         instagram: httpsOrLocal.parse(text(f, "instagram")),
         mapsUrl: z
           .url()
@@ -257,7 +266,8 @@ export async function savePanel(_: FormState, f: FormData): Promise<FormState> {
         bookingDays: num(f, "bookingDays", 1, 90),
         minNoticeHours: num(f, "minNoticeHours", 1, 72),
         emailEnabled: f.get("emailEnabled") === "on",
-        whatsappEnabled: f.get("whatsappEnabled") === "on",
+        ownerEmailEnabled: f.get("ownerEmailEnabled") === "on",
+        reactivationDays: num(f, "reactivationDays", 7, 365),
       };
       await db
         .update(S.salons)
@@ -275,22 +285,27 @@ export async function savePanel(_: FormState, f: FormData): Promise<FormState> {
         .from(S.salons)
         .where(eq(S.salons.id, t.id));
       const messages = { ...salon.settings.messages },
-        whatsappTemplates = { ...salon.settings.whatsappTemplates };
-      for (const key of [
-        "confirmation",
-        "reminder24",
-        "reminder2",
-        "thanks",
-      ] as const) {
+        whatsappMessages = {
+          ...defaultWhatsAppMessages,
+          ...salon.settings.whatsappMessages,
+        };
+      for (const key of ["confirmation", "reminder24", "thanks"] as const) {
         messages[key] = short(f, key, 1500);
-        const template = text(f, `template-${key}`);
-        if (template && !/^[a-z0-9_]{1,100}$/.test(template))
-          throw new Error("Usa un nombre válido de plantilla Meta.");
-        whatsappTemplates[key] = template;
+        if (!validateTemplate(messages[key]))
+          throw new Error("Hay una variable desconocida en el correo.");
+      }
+      for (const key of Object.keys(
+        defaultWhatsAppMessages,
+      ) as (keyof typeof defaultWhatsAppMessages)[]) {
+        whatsappMessages[key] = short(f, `wa-${key}`, 1500);
+        if (!validateTemplate(whatsappMessages[key]))
+          throw new Error(
+            "Hay una variable desconocida en la plantilla de WhatsApp.",
+          );
       }
       await db
         .update(S.salons)
-        .set({ settings: { ...salon.settings, messages, whatsappTemplates } })
+        .set({ settings: { ...salon.settings, messages, whatsappMessages } })
         .where(eq(S.salons.id, t.id));
     } else if (kind === "status") {
       const status = z
@@ -316,10 +331,14 @@ export async function savePanel(_: FormState, f: FormData): Promise<FormState> {
           throw new Error(
             "Espera hasta la hora de la cita para marcar el resultado.",
           );
-        await tx
+        const [updated] = await tx
           .update(S.appointments)
-          .set({ status })
-          .where(t.where(S.appointments, eq(S.appointments.id, a.id)));
+          .set({
+            status,
+            version: status === "cancelled" ? a.version + 1 : a.version,
+          })
+          .where(t.where(S.appointments, eq(S.appointments.id, a.id)))
+          .returning();
         await tx
           .update(S.scheduledMessages)
           .set({ status: "cancelled" })
@@ -333,12 +352,39 @@ export async function savePanel(_: FormState, f: FormData): Promise<FormState> {
                 : undefined,
             ),
           );
+        await invalidateAppointmentTasks(tx, t.id, a.id);
+        if (status === "completed") await ensureAppointmentTasks(tx, updated);
+        if (status === "cancelled") {
+          const [salon] = await tx
+            .select()
+            .from(S.salons)
+            .where(eq(S.salons.id, t.id));
+          await enqueueTeamNotifications(tx, salon, updated, "cancelled");
+        }
+      });
+      after(async () => {
+        try {
+          await flushMessages();
+        } catch {
+          console.error("La cola retomará los avisos del salón.");
+        }
       });
     } else if (kind === "client")
       await db
         .update(S.clients)
         .set({
           name: short(f, "name"),
+          birthday: text(f, "birthday")
+            ? z.iso
+                .date()
+                .refine(
+                  (v) =>
+                    v <= new Date().toISOString().slice(0, 10) &&
+                    v >= "1900-01-01",
+                )
+                .parse(text(f, "birthday"))
+            : null,
+          marketingConsent: f.get("marketingConsent") === "on",
           email: z.email().parse(text(f, "email")),
           phone: z
             .string()
@@ -451,7 +497,7 @@ export async function saveAdmin(_: FormState, f: FormData): Promise<FormState> {
             slug,
             settings: {
               ...defaultSettings,
-              whatsapp: short(f, "whatsapp"),
+              whatsapp: normalizeColombianPhone(short(f, "whatsapp")),
               address: short(f, "address"),
               city: short(f, "city"),
             },

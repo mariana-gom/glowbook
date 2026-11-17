@@ -2,10 +2,11 @@ import type { CSSProperties } from "react";
 import Link from "next/link";
 import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
-import { ArrowUpRight, LogOut } from "lucide-react";
+import { ArrowUpRight } from "lucide-react";
 import { panelAccess } from "@/lib/access";
 import { salonData } from "@/lib/data";
 import { PanelSidebar } from "@/components/panel-sidebar";
+import { LogoutButton } from "@/components/logout-button";
 import { auth } from "@/lib/auth";
 export const dynamic = "force-dynamic";
 export const metadata = {
@@ -69,15 +70,7 @@ export default async function PanelLayout({
                 </span>
               </span>
             </div>
-            <form action={logout}>
-              <button
-                aria-label="Cerrar sesión"
-                title="Cerrar sesión"
-                className="p-2 muted"
-              >
-                <LogOut size={14} />
-              </button>
-            </form>
+            <LogoutButton action={logout} />
           </div>
         </header>
         {access.demo && (

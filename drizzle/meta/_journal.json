@@ -22,6 +22,20 @@
       "when": 1794930943365,
       "tag": "0002_contact_snapshot",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1794933995704,
+      "tag": "0003_manual_whatsapp_and_notifications",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1794934069394,
+      "tag": "0004_notification_policy",
+      "breakpoints": true
     }
   ]
 }

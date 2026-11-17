@@ -65,7 +65,27 @@ export default async function Clients({
                       required
                     />
                   </label>
+                  <label>
+                    Fecha de cumpleaños (opcional)
+                    <input
+                      name="birthday"
+                      type="date"
+                      defaultValue={client.birthday ?? ""}
+                    />
+                  </label>
                 </div>
+                <label className="flex items-start gap-3 text-xs font-normal">
+                  <input
+                    type="checkbox"
+                    name="marketingConsent"
+                    defaultChecked={client.marketingConsent}
+                  />
+                  <span>
+                    La clienta autorizó recibir mantenimiento, reactivación y
+                    felicitaciones. Registra esta autorización solo si la
+                    obtuviste.
+                  </span>
+                </label>
               </ActionForm>
             ) : (
               <p className="text-sm muted">

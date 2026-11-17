@@ -28,6 +28,20 @@ export type MessageKind =
   | "maintenance"
   | "birthday"
   | "reactivation";
+export type FollowUpKind =
+  | "confirmation"
+  | "reminder24"
+  | "thanks"
+  | "maintenance"
+  | "reactivation"
+  | "birthday";
+export type WhatsAppTemplateKey = FollowUpKind | "clientConfirmation";
+export type DeliveryKind =
+  | MessageKind
+  | "owner_new"
+  | "owner_rescheduled"
+  | "owner_cancelled"
+  | "daily_digest";
 export type SalonSettings = {
   cancellationHours: number;
   bookingDays: number;
@@ -40,9 +54,10 @@ export type SalonSettings = {
   mapsUrl: string;
   heroUrl: string;
   messages: Record<MessageKind, string>;
-  whatsappTemplates: Partial<Record<MessageKind, string>>;
+  whatsappMessages: Record<WhatsAppTemplateKey, string>;
+  reactivationDays: number;
+  ownerEmailEnabled: boolean;
   emailEnabled: boolean;
-  whatsappEnabled: boolean;
 };
 export const salons = pgTable("salons", {
   id: id(),
@@ -260,6 +275,7 @@ export const appointments = pgTable(
     total: integer("total").notNull(),
     tokenHash: text("token_hash").notNull().unique(),
     version: integer("version").notNull().default(1),
+    ownerConfirmedAt: timestamp("owner_confirmed_at", { withTimezone: true }),
     requestKey: text("request_key").notNull(),
     createdAt: createdAt(),
   },
@@ -310,9 +326,12 @@ export const scheduledMessages = pgTable(
     id: id(),
     salonId: salonId(),
     appointmentId: uuid("appointment_id"),
-    clientId: uuid("client_id").notNull(),
-    kind: text("kind").$type<MessageKind>().notNull(),
-    channel: text("channel").$type<"email" | "whatsapp">().notNull(),
+    clientId: uuid("client_id"),
+    userId: text("user_id").references(() => users.id),
+    subscriptionId: uuid("subscription_id"),
+    appointmentVersion: integer("appointment_version"),
+    kind: text("kind").$type<DeliveryKind>().notNull(),
+    channel: text("channel").$type<"email" | "whatsapp" | "push">().notNull(),
     dedupeKey: text("dedupe_key").notNull(),
     scheduledAt: timestamp("scheduled_at", { withTimezone: true }).notNull(),
     status: text("status")
@@ -335,12 +354,15 @@ export const scheduledMessages = pgTable(
         salon: string;
         text: string;
         managementUrl: string;
-        template?: string;
       }>()
       .notNull(),
   },
   (t) => [
     unique().on(t.salonId, t.dedupeKey),
+    foreignKey({
+      columns: [t.salonId, t.subscriptionId],
+      foreignColumns: [pushSubscriptions.salonId, pushSubscriptions.id],
+    }).onDelete("cascade"),
     index("message_due").on(t.status, t.scheduledAt),
     foreignKey({
       columns: [t.salonId, t.appointmentId],
@@ -417,4 +439,79 @@ export const promotions = pgTable(
     unique().on(t.salonId, t.code),
     check("discount_range", sql`${t.discountPercent} BETWEEN 1 AND 100`),
   ],
+);
+
+// Acciones manuales: "marked_sent" registra el toque, no una entrega verificada por WhatsApp.
+export const followUpTasks = pgTable(
+  "follow_up_tasks",
+  {
+    id: id(),
+    salonId: salonId(),
+    clientId: uuid("client_id").notNull(),
+    serviceId: uuid("service_id"),
+    appointmentId: uuid("appointment_id"),
+    appointmentVersion: integer("appointment_version"),
+    kind: text("kind").$type<FollowUpKind>().notNull(),
+    dedupeKey: text("dedupe_key").notNull(),
+    dueOn: text("due_on").notNull(),
+    status: text("status")
+      .$type<"pending" | "marked_sent" | "dismissed">()
+      .notNull()
+      .default("pending"),
+    markedAt: timestamp("marked_at", { withTimezone: true }),
+    markedBy: text("marked_by").references(() => users.id),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    unique().on(t.salonId, t.dedupeKey),
+    index("tasks_due").on(t.salonId, t.status, t.dueOn),
+    foreignKey({
+      columns: [t.salonId, t.serviceId],
+      foreignColumns: [services.salonId, services.id],
+    }),
+    foreignKey({
+      columns: [t.salonId, t.clientId],
+      foreignColumns: [clients.salonId, clients.id],
+    }),
+    foreignKey({
+      columns: [t.salonId, t.appointmentId],
+      foreignColumns: [appointments.salonId, appointments.id],
+    }),
+    check(
+      "task_status",
+      sql`${t.status} IN ('pending','marked_sent','dismissed')`,
+    ),
+    check(
+      "task_kind",
+      sql`${t.kind} IN ('confirmation','reminder24','thanks','maintenance','reactivation','birthday')`,
+    ),
+  ],
+);
+export const pushSubscriptions = pgTable(
+  "push_subscriptions",
+  {
+    id: id(),
+    salonId: salonId(),
+    userId: text("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    endpoint: text("endpoint").notNull().unique(),
+    keys: jsonb("keys").$type<{ p256dh: string; auth: string }>().notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [
+    unique().on(t.salonId, t.id),
+    index("push_user").on(t.salonId, t.userId),
+  ],
+);
+// La preparación de un día se confirma en la misma transacción que su correo y sus pendientes.
+export const dailyRuns = pgTable(
+  "daily_runs",
+  {
+    id: id(),
+    salonId: salonId(),
+    day: text("day").notNull(),
+    createdAt: createdAt(),
+  },
+  (t) => [unique().on(t.salonId, t.day)],
 );

@@ -10,6 +10,7 @@ import {
   Sparkles,
   Star,
 } from "lucide-react";
+import { buildWhatsAppLink } from "@/lib/whatsapp";
 import { Brand } from "@/components/brand";
 import { Button } from "@/components/ui/button";
 export default function Home() {
@@ -263,7 +264,7 @@ export default function Home() {
               {[
                 "Página pública y reservas ilimitadas en el MVP",
                 "Agenda, servicios, equipo y clientas",
-                "Automatizaciones por correo y WhatsApp*",
+                "Correos automáticos y WhatsApp en un toque*",
                 "Configuración y acompañamiento inicial",
               ].map((t) => (
                 <li className="flex gap-3 text-sm" key={t}>
@@ -275,7 +276,11 @@ export default function Home() {
             {sales ? (
               <Button asChild className="w-full">
                 <a
-                  href={`https://wa.me/${sales}?text=${encodeURIComponent("¡Hola! Quiero GlowBook para mi salón.")}`}
+                  href={buildWhatsAppLink(
+                    sales,
+                    "¡Hola! Quiero GlowBook para mi salón.",
+                    {},
+                  )}
                   target="_blank"
                   rel="noreferrer"
                 >
@@ -290,8 +295,9 @@ export default function Home() {
               </Button>
             )}
             <p className="mb-0 mt-4 text-[10px] muted">
-              *Requiere configuración del remitente y plantillas aprobadas por
-              Meta. Las tarifas de los proveedores se cotizan por separado.
+              *WhatsApp abre el chat con el mensaje listo; tú pulsas Enviar. Los
+              correos requieren un remitente verificado y están sujetos a las
+              cuotas de Resend.
             </p>
           </div>
         </section>

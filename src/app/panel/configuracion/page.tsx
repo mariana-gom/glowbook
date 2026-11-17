@@ -74,6 +74,17 @@ export default async function Settings() {
                 required
               />
             </label>
+            <label>
+              Días sin volver para reactivación
+              <input
+                name="reactivationDays"
+                type="number"
+                min={7}
+                max={365}
+                defaultValue={c.reactivationDays ?? 60}
+                required
+              />
+            </label>
           </div>
           <label>
             Presentación
@@ -130,10 +141,10 @@ export default async function Settings() {
           <label className="flex items-center gap-2">
             <input
               type="checkbox"
-              name="whatsappEnabled"
-              defaultChecked={c.whatsappEnabled}
+              name="ownerEmailEnabled"
+              defaultChecked={c.ownerEmailEnabled ?? true}
             />
-            Enviar por WhatsApp (requiere credenciales y plantillas aprobadas)
+            Enviar correos a las dueñas: nuevas citas, cambios y resumen diario
           </label>
         </ActionForm>
       </section>

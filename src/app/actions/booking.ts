@@ -1,5 +1,6 @@
 "use server";
-import { createHmac, createHash } from "node:crypto";
+import { createHash } from "node:crypto";
+import { bookingToken } from "@/lib/appointment-contact";
 import { z } from "zod";
 import { and, eq, gte, lt, inArray, sql } from "drizzle-orm";
 import { after } from "next/server";
@@ -9,7 +10,12 @@ import { tenant } from "@/db/tenant";
 import { demoData, DEMO_SLUG } from "@/lib/demo";
 import { availableSlots, type Slot } from "@/lib/availability";
 import { bogotaDate, dayKey } from "@/lib/utils";
-import { buildMessages, processMessages } from "@/lib/messages";
+import {
+  ensureAppointmentTasks,
+  invalidateAppointmentTasks,
+} from "@/lib/follow-ups";
+import { enqueueTeamNotifications } from "@/lib/notification-builders";
+import { buildMessages, flushMessages } from "@/lib/messages";
 const selection = z.object({
   slug: z.string().min(1).max(100),
   serviceIds: z.array(z.uuid()).min(1).max(8),
@@ -151,9 +157,7 @@ export async function createBooking(
     return { error: "El salón todavía no ha habilitado las reservas." };
   const q = parsed.data,
     { db, close } = database();
-  const token = createHmac("sha256", process.env.BOOKING_TOKEN_SECRET)
-    .update(q.requestKey)
-    .digest("hex");
+  const token = bookingToken(q.requestKey);
   const tokenHash = createHash("sha256").update(token).digest("hex");
   try {
     await db.transaction(async (tx) => {
@@ -300,16 +304,31 @@ export async function createBooking(
         appointment,
         { ...client, name: q.name, email: q.email },
         token,
+        services.map((s) => s.name),
+        professional.name,
       );
       if (messages.length)
         await tx
           .insert(S.scheduledMessages)
           .values(messages)
           .onConflictDoNothing();
+      await ensureAppointmentTasks(tx, appointment);
+      await tx
+        .update(S.followUpTasks)
+        .set({ status: "dismissed" })
+        .where(
+          t.where(
+            S.followUpTasks,
+            eq(S.followUpTasks.clientId, client.id),
+            eq(S.followUpTasks.status, "pending"),
+            inArray(S.followUpTasks.kind, ["maintenance", "reactivation"]),
+          ),
+        );
+      await enqueueTeamNotifications(tx, salon, appointment, "created");
     });
     after(async () => {
       try {
-        await processMessages();
+        await flushMessages();
       } catch {
         console.error("No se procesó la cola inmediata; el cron la retomará.");
       }
@@ -413,11 +432,14 @@ export async function manageBooking(
             inArray(S.scheduledMessages.status, ["pending", "processing"]),
           ),
         );
+      await invalidateAppointmentTasks(tx, t.id, a.id);
       if (action === "cancel") {
-        await tx
+        const [cancelled] = await tx
           .update(S.appointments)
           .set({ status: "cancelled", version: a.version + 1 })
-          .where(t.where(S.appointments, eq(S.appointments.id, a.id)));
+          .where(t.where(S.appointments, eq(S.appointments.id, a.id)))
+          .returning();
+        await enqueueTeamNotifications(tx, salon, cancelled, "cancelled");
         return;
       }
       const startsAt = new Date(z.iso.datetime().parse(values.startsAt));
@@ -471,6 +493,7 @@ export async function manageBooking(
           endsAt,
           busyUntil: new Date(+endsAt + cleanup * 60000),
           version: a.version + 1,
+          ownerConfirmedAt: null,
         })
         .where(t.where(S.appointments, eq(S.appointments.id, a.id)))
         .returning();
@@ -478,13 +501,43 @@ export async function manageBooking(
         .select()
         .from(S.clients)
         .where(t.where(S.clients, eq(S.clients.id, a.clientId)));
-      const messages = buildMessages(salon, updated, client, token);
+      const detail = await tx
+        .select()
+        .from(S.appointmentServices)
+        .where(
+          t.where(
+            S.appointmentServices,
+            eq(S.appointmentServices.appointmentId, a.id),
+          ),
+        );
+      const [professional] = await tx
+        .select()
+        .from(S.staff)
+        .where(t.where(S.staff, eq(S.staff.id, a.staffId)));
+      const messages = buildMessages(
+        salon,
+        updated,
+        client,
+        token,
+        detail.map((s) => s.name),
+        professional?.name ?? "Tu profesional",
+      );
+      await ensureAppointmentTasks(tx, updated);
+      await enqueueTeamNotifications(tx, salon, updated, "rescheduled");
       if (messages.length)
         await tx
           .insert(S.scheduledMessages)
           .values(messages)
           .onConflictDoNothing();
     });
+    if (action !== "review")
+      after(async () => {
+        try {
+          await flushMessages();
+        } catch {
+          console.error("La cola retomará los avisos de cambio.");
+        }
+      });
     return { ok: true };
   } catch (e) {
     return {

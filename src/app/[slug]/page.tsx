@@ -12,6 +12,7 @@ import {
   Sparkles,
   Star,
 } from "lucide-react";
+import { buildWhatsAppLink } from "@/lib/whatsapp";
 import { salonData } from "@/lib/data";
 import { money } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -304,7 +305,11 @@ export default async function SalonPage({
                   className="border border-white/30 hover:bg-white/10"
                 >
                   <a
-                    href={`https://wa.me/${settings.whatsapp}`}
+                    href={buildWhatsAppLink(
+                      settings.whatsapp,
+                      "Hola, quiero información sobre {salon}.",
+                      { salon: salon.name },
+                    )}
                     target="_blank"
                     rel="noreferrer"
                   >

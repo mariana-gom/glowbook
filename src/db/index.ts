@@ -10,3 +10,5 @@ export function database() {
   const pool = new Pool({ connectionString: process.env.DATABASE_URL });
   return { db: drizzle(pool, { schema }), close: () => pool.end() };
 }
+export type Database = ReturnType<typeof database>["db"];
+export type Transaction = Parameters<Parameters<Database["transaction"]>[0]>[0];

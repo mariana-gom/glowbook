@@ -2,6 +2,9 @@ import { defineConfig, devices } from "@playwright/test";
 export default defineConfig({
   testDir: "./tests/e2e",
   fullyParallel: true,
+  workers: 2,
+  expect: { timeout: 10000 },
+  timeout: 45000,
   reporter: "list",
   use: { baseURL: "http://localhost:3101", trace: "retain-on-failure" },
   webServer: {

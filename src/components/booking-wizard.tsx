@@ -2,6 +2,7 @@
 import { useRef, useState, useTransition } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import { sendWhatsApp, defaultWhatsAppMessages } from "@/lib/whatsapp";
 import { useRouter } from "next/navigation";
 import {
   ArrowLeft,
@@ -166,6 +167,39 @@ export function BookingWizard({
             {staff.find((p) => p.id === slot?.staffId)?.name} · {money(total)}
           </p>
         </div>
+        <Button asChild className="mb-4">
+          <a
+            href={
+              sendWhatsApp(
+                salon.settings.whatsapp,
+                {
+                  ...defaultWhatsAppMessages,
+                  ...salon.settings.whatsappMessages,
+                }.clientConfirmation,
+                {
+                  nombre: demoName,
+                  servicio: selected.map((s) => s.name).join(" + "),
+                  fecha: prettyDate(day + "T12:00:00-05:00"),
+                  hora: slot?.label ?? "",
+                  profesional:
+                    staff.find((p) => p.id === slot?.staffId)?.name ?? "",
+                  codigo: "DEMO",
+                  enlace_reprogramar: `/${salon.slug}/reservar`,
+                  enlace: `/${salon.slug}/reservar`,
+                  salon: salon.name,
+                },
+              ).url
+            }
+            target="_blank"
+            rel="noreferrer"
+          >
+            Confirmar por WhatsApp
+          </a>
+        </Button>
+        <p className="text-xs muted">
+          Este enlace abre un chat de demostración. No envíes mensajes a los
+          contactos ficticios.
+        </p>
         <Button asChild>
           <Link href="/demo">
             Seguir explorando <ArrowRight size={16} />

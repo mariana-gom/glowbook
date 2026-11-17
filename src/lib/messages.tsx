@@ -1,61 +1,11 @@
 import { Resend } from "resend";
-import { AppointmentEmail } from "@/emails/appointment";
 import { eq, sql, and, inArray } from "drizzle-orm";
 import { database } from "@/db";
 import * as S from "@/db/schema";
 import { tenant } from "@/db/tenant";
-import { prettyDate, clock } from "./utils";
-export function buildMessages(
-  salon: typeof S.salons.$inferSelect,
-  appointment: typeof S.appointments.$inferSelect,
-  client: typeof S.clients.$inferSelect,
-  token: string,
-) {
-  client = { ...client, ...appointment.contact };
-  const settings = salon.settings;
-  const url = `${process.env.BETTER_AUTH_URL}/gestionar/${token}`;
-  const timings = [
-    { kind: "confirmation", at: Date.now() },
-    { kind: "reminder24", at: +appointment.startsAt - 24 * 3600000 },
-    { kind: "reminder2", at: +appointment.startsAt - 2 * 3600000 },
-    { kind: "thanks", at: +appointment.endsAt + 2 * 3600000 },
-  ] as const;
-  return timings
-    .filter((x) => x.kind === "confirmation" || x.at > Date.now())
-    .flatMap(({ kind, at }) =>
-      (["email", "whatsapp"] as const)
-        .filter((channel) =>
-          channel === "email"
-            ? settings.emailEnabled
-            : settings.whatsappEnabled,
-        )
-        .map((channel) => ({
-          salonId: salon.id,
-          appointmentId: appointment.id,
-          clientId: client.id,
-          kind,
-          channel,
-          dedupeKey: `${appointment.id}:${appointment.version}:${kind}:${channel}`,
-          scheduledAt: new Date(at),
-          payload: {
-            name: client.name,
-            email: client.email,
-            phone: client.phone,
-            salon: salon.name,
-            text: settings.messages[kind]
-              .replaceAll("{nombre}", client.name)
-              .replaceAll("{salon}", salon.name)
-              .replaceAll(
-                "{fecha}",
-                `${prettyDate(appointment.startsAt)} a las ${clock(appointment.startsAt)}`,
-              )
-              .replaceAll("{enlace}", url),
-            managementUrl: url,
-            template: settings.whatsappTemplates[kind],
-          },
-        })),
-    );
-}
+import { AppointmentEmail } from "@/emails/appointment";
+import { sendPush, pushConfigured } from "./push";
+export { buildMessages } from "./notification-builders";
 class DeliveryError extends Error {
   constructor(
     message: string,
@@ -65,85 +15,29 @@ class DeliveryError extends Error {
     super(message);
   }
 }
-// Único punto de integración con Meta: las plantillas aprobadas deben tener dos parámetros: texto y enlace.
-export async function sendWhatsApp(input: {
-  phone: string;
-  template?: string;
-  text: string;
-  managementUrl: string;
-}) {
-  if (
-    !process.env.WHATSAPP_TOKEN ||
-    !process.env.WHATSAPP_PHONE_NUMBER_ID ||
-    !input.template
-  )
-    throw new DeliveryError(
-      "Faltan credenciales o plantilla aprobada de WhatsApp.",
-    );
-  let response: Response;
-  try {
-    response = await fetch(
-      `https://graph.facebook.com/${process.env.WHATSAPP_API_VERSION ?? "v23.0"}/${process.env.WHATSAPP_PHONE_NUMBER_ID}/messages`,
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${process.env.WHATSAPP_TOKEN}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          messaging_product: "whatsapp",
-          to: input.phone.replace("+", ""),
-          type: "template",
-          template: {
-            name: input.template,
-            language: { code: "es_CO" },
-            components: [
-              {
-                type: "body",
-                parameters: [
-                  { type: "text", text: input.text },
-                  { type: "text", text: input.managementUrl },
-                ],
-              },
-            ],
-          },
-        }),
-        signal: AbortSignal.timeout(12000),
-      },
-    );
-  } catch {
-    throw new DeliveryError(
-      "Respuesta de Meta incierta; revisar en el proveedor antes de reenviar.",
-      false,
-      true,
-    );
-  }
-  if (!response.ok)
-    throw new DeliveryError(
-      `Meta HTTP ${response.status}`,
-      response.status === 429,
-      response.status >= 500,
-    );
-  const body = await response.json();
-  if (!body.messages?.[0]?.id)
-    throw new DeliveryError(
-      "Meta no confirmó el identificador del envío.",
-      false,
-      true,
-    );
-  return body.messages[0].id as string;
-}
 export async function processMessages() {
   const { db, close } = database();
-  const stats = { sent: 0, failed: 0, uncertain: 0, skipped: 0 };
+  const stats = { claimed: 0, sent: 0, failed: 0, uncertain: 0, skipped: 0 };
   try {
-    // Un envío abandonado puede haber llegado al proveedor: nunca se reenvía automáticamente.
+    // No se conserva ningún envío automático de WhatsApp del modelo anterior.
+    await db
+      .update(S.scheduledMessages)
+      .set({
+        status: "cancelled",
+        lastError: "WhatsApp funciona mediante enlaces manuales.",
+      })
+      .where(
+        and(
+          eq(S.scheduledMessages.channel, "whatsapp"),
+          inArray(S.scheduledMessages.status, ["pending", "processing"]),
+        ),
+      );
     await db
       .update(S.scheduledMessages)
       .set({
         status: "uncertain",
         lastError:
-          "El proceso perdió su bloqueo. Verificar entrega con el proveedor.",
+          "Proceso interrumpido. Verifica la entrega antes de reenviar.",
       })
       .where(
         and(
@@ -159,10 +53,13 @@ export async function processMessages() {
           and(
             eq(S.scheduledMessages.status, "pending"),
             sql`${S.scheduledMessages.scheduledAt} <= now()`,
+            pushConfigured()
+              ? inArray(S.scheduledMessages.channel, ["email", "push"])
+              : eq(S.scheduledMessages.channel, "email"),
           ),
         )
         .orderBy(S.scheduledMessages.scheduledAt)
-        .limit(8)
+        .limit(4)
         .for("update", { skipLocked: true });
       if (rows.length)
         await tx
@@ -170,7 +67,7 @@ export async function processMessages() {
           .set({
             status: "processing",
             lockedAt: new Date(),
-            firstAttemptAt: sql`coalesce(${S.scheduledMessages.firstAttemptAt}, now())`,
+            firstAttemptAt: sql`coalesce(${S.scheduledMessages.firstAttemptAt},now())`,
             attempts: sql`${S.scheduledMessages.attempts}+1`,
           })
           .where(
@@ -181,14 +78,15 @@ export async function processMessages() {
           );
       return rows;
     });
+    stats.claimed = claimed.length;
     async function deliver(message: typeof S.scheduledMessages.$inferSelect) {
       const t = tenant(message.salonId);
-      // Serializa envío vs cancelación/reprogramación y vuelve a validar el estado actual.
       await db.transaction(async (tx) => {
         const [salon] = await tx
           .select()
           .from(S.salons)
           .where(eq(S.salons.id, t.id));
+        // Mantiene el mismo orden de bloqueos que cancelar y reprogramar.
         const [appointment] = message.appointmentId
           ? await tx
               .select()
@@ -211,24 +109,73 @@ export async function processMessages() {
             ),
           )
           .for("update");
-        if (current.status !== "processing") return;
+        if (!current || current.status !== "processing") return;
         const where = t.where(
           S.scheduledMessages,
           eq(S.scheduledMessages.id, message.id),
         );
-        if (
-          !salon?.active ||
-          (message.appointmentId &&
-            (!appointment ||
-              ["cancelled", "no_show"].includes(appointment.status)))
-        ) {
+        async function cancel(reason: string) {
           await tx
             .update(S.scheduledMessages)
-            .set({ status: "cancelled" })
+            .set({ status: "cancelled", lastError: reason })
             .where(where);
           stats.skipped++;
-          return;
         }
+        const team =
+          message.kind.startsWith("owner_") || message.kind === "daily_digest";
+        if (!salon?.active) return cancel("Salón suspendido.");
+        if (
+          message.appointmentId &&
+          (!appointment ||
+            (message.appointmentVersion !== null &&
+              message.appointmentVersion !== appointment.version))
+        )
+          return cancel("La cita cambió de versión.");
+        if (
+          appointment &&
+          (message.kind === "owner_cancelled"
+            ? appointment.status !== "cancelled"
+            : ["cancelled", "no_show"].includes(appointment.status))
+        )
+          return cancel("Estado de cita incompatible.");
+        if (team) {
+          if (!message.userId) return cancel("Falta destinatario del equipo.");
+          const [member] = await tx
+            .select()
+            .from(S.memberships)
+            .where(
+              t.where(S.memberships, eq(S.memberships.userId, message.userId)),
+            );
+          const [staff] = appointment
+            ? await tx
+                .select()
+                .from(S.staff)
+                .where(t.where(S.staff, eq(S.staff.id, appointment.staffId)))
+            : [];
+          if (
+            !member ||
+            (member.role !== "owner" &&
+              !(
+                message.channel === "push" &&
+                member.role === "staff" &&
+                staff?.userId === member.userId
+              ))
+          )
+            return cancel("El destinatario ya no tiene permiso.");
+          if (
+            message.channel === "email" &&
+            !(salon.settings.ownerEmailEnabled ?? true)
+          )
+            return cancel("Correos de la dueña deshabilitados.");
+        } else if (!salon.settings.emailEnabled)
+          return cancel("Correos a clientas deshabilitados.");
+        if (
+          message.kind.startsWith("reminder") &&
+          appointment &&
+          (appointment.status !== "confirmed" ||
+            +appointment.startsAt <= Date.now())
+        )
+          return cancel("Recordatorio vencido.");
         if (message.kind === "thanks" && appointment?.status !== "completed") {
           await tx
             .update(S.scheduledMessages)
@@ -243,49 +190,91 @@ export async function processMessages() {
           stats.skipped++;
           return;
         }
-        if (
-          message.kind.startsWith("reminder") &&
-          appointment &&
-          +appointment.startsAt <= Date.now()
-        ) {
-          await tx
-            .update(S.scheduledMessages)
-            .set({ status: "cancelled" })
-            .where(where);
-          stats.skipped++;
-          return;
-        }
         try {
           let providerId: string;
-          if (message.channel === "whatsapp")
-            providerId = await sendWhatsApp(message.payload);
-          else {
+          if (message.channel === "push") {
+            const [subscription] = message.subscriptionId
+              ? await tx
+                  .select()
+                  .from(S.pushSubscriptions)
+                  .where(
+                    t.where(
+                      S.pushSubscriptions,
+                      eq(S.pushSubscriptions.id, message.subscriptionId),
+                      eq(S.pushSubscriptions.userId, message.userId!),
+                    ),
+                  )
+              : [];
+            if (!subscription)
+              return cancel("Suscripción de este dispositivo eliminada.");
+            try {
+              providerId = await sendPush(subscription, {
+                title: salon.name,
+                body: message.payload.text,
+                url:
+                  new URL(message.payload.managementUrl).pathname +
+                  new URL(message.payload.managementUrl).search,
+                tag: message.dedupeKey,
+              });
+            } catch (e) {
+              const status = (e as { statusCode?: number }).statusCode;
+              if (status === 404 || status === 410) {
+                await tx
+                  .delete(S.pushSubscriptions)
+                  .where(
+                    t.where(
+                      S.pushSubscriptions,
+                      eq(S.pushSubscriptions.id, subscription.id),
+                    ),
+                  );
+                stats.skipped++;
+                return;
+              }
+              throw new DeliveryError(
+                status
+                  ? `Web Push HTTP ${status}`
+                  : "Web Push sin respuesta confirmada.",
+                status === 429 || Boolean(status && status >= 500),
+                !status,
+              );
+            }
+          } else {
             if (!process.env.RESEND_API_KEY || !process.env.EMAIL_FROM)
               throw new DeliveryError(
                 "Configura Resend y un remitente verificado.",
               );
-            // Resend conserva las claves de idempotencia 24h. Fuera de ese plazo se revisa manualmente.
             if (
-              message.attempts > 0 &&
               message.firstAttemptAt &&
               Date.now() - +message.firstAttemptAt > 23 * 3600000
             )
               throw new DeliveryError(
-                "La ventana de idempotencia expiró.",
+                "Ventana de idempotencia expirada.",
                 false,
                 true,
               );
-            const resend = new Resend(process.env.RESEND_API_KEY);
-            const result = await resend.emails.send(
+            const subject =
+              message.kind === "daily_digest"
+                ? "Tu agenda de hoy"
+                : message.kind.startsWith("owner_")
+                  ? {
+                      owner_new: "Nueva cita",
+                      owner_rescheduled: "Cita reprogramada",
+                      owner_cancelled: "Cita cancelada",
+                    }[message.kind as "owner_new"]
+                  : "Tu cita";
+            const result = await new Resend(
+              process.env.RESEND_API_KEY,
+            ).emails.send(
               {
                 from: process.env.EMAIL_FROM,
                 to: message.payload.email,
-                subject: `${message.payload.salon} · ${message.kind === "thanks" ? "¿Cómo estuvo tu visita?" : "Tu cita"}`,
+                subject: `${salon.name} · ${subject}`,
                 react: (
                   <AppointmentEmail
-                    salon={message.payload.salon}
+                    salon={salon.name}
                     text={message.payload.text}
                     url={message.payload.managementUrl}
+                    team={team}
                   />
                 ),
               },
@@ -305,7 +294,7 @@ export async function processMessages() {
               );
             if (!result.data?.id)
               throw new DeliveryError(
-                "Resend no confirmó el envío.",
+                "Resend no confirmó la aceptación.",
                 false,
                 true,
               );
@@ -326,7 +315,7 @@ export async function processMessages() {
             error instanceof DeliveryError
               ? error
               : new DeliveryError(
-                  "Entrega incierta. Consultar el proveedor.",
+                  "Entrega incierta. Revisar el proveedor.",
                   false,
                   true,
                 );
@@ -341,7 +330,7 @@ export async function processMessages() {
               status,
               lastError: e.message,
               scheduledAt: new Date(
-                Date.now() + Math.pow(2, message.attempts + 1) * 60000,
+                Date.now() + 2 ** (message.attempts + 1) * 60000,
               ),
             })
             .where(where);
@@ -350,11 +339,19 @@ export async function processMessages() {
         }
       });
     }
-    // Dos envíos paralelos mantienen la carga y el tiempo de ejecución acotados.
     for (let i = 0; i < claimed.length; i += 2)
       await Promise.all(claimed.slice(i, i + 2).map(deliver));
     return stats;
   } finally {
     await close();
   }
+}
+
+// Agota los lotes inmediatos sin depender del cron de mañana. Cada lote tiene tiempo acotado.
+export async function flushMessages() {
+  const start = Date.now();
+  let batch;
+  do {
+    batch = await processMessages();
+  } while (batch.claimed === 4 && Date.now() - start < 130000);
 }

@@ -17,6 +17,8 @@ src/
       servicios/               Categorías, catálogo, precios y tiempos
       equipo/                  Perfiles, asignación, jornadas y ausencias
       mensajes/                Plantillas y estados de envío
+      pendientes/              Seguimientos manuales de WhatsApp
+      notificaciones/          Instalación y Web Push del dispositivo
       configuracion/           Marca, reglas, galería y reseñas
     superadmin/                Altas, cuentas y activación de negocios
     actions/                   Mutaciones autorizadas y validadas
@@ -24,7 +26,7 @@ src/
       auth/[...all]/           Better Auth
       images/                  Carga autenticada en Vercel Blob
       cron/process/            Cola de mensajes
-      cron/daily/              Gancho protegido; campañas deshabilitadas
+      cron/daily/              Resumen, correos y pendientes del día
   components/                  Interfaz reutilizable y formularios
     ui/                        Primitivas shadcn/ui
   db/
@@ -54,8 +56,11 @@ salons
  │   ├─ appointments ── staff
  │   │   ├─ appointment_services ── services
  │   │   ├─ scheduled_messages
- │   │   └─ reviews
+ │   │   ├─ reviews
+ │   │   └─ follow_up_tasks
  │   └─ loyalty_transactions      [reservada para Fase 2]
+ ├─ push_subscriptions ── scheduled_messages
+ ├─ daily_runs
  ├─ gallery_photos
  └─ promotions                   [reservada para Fase 2]
 ```
@@ -69,7 +74,10 @@ salons
 - `clients`: contacto por salón, autorización operacional y consentimiento comercial separado.
 - `appointments`: intervalos con zona horaria, estado, total, versión, clave de petición y hash del token de gestión. Conserva un contacto de esa reserva, sin sobrescribir el perfil desde una reserva pública.
 - `appointment_services`: nombre, precio y duración contratados; editar el catálogo no altera el historial.
-- `scheduled_messages`: fecha, canal, clave de deduplicación, estado, intentos, primera tentativa, errores y referencia del proveedor.
+- `scheduled_messages`: correos y Web Push, versión, destinatario, deduplicación, estado, intentos y errores. El canal WhatsApp se conserva solo como historial de la versión anterior.
+- `follow_up_tasks`: pendientes manuales con clave única, fecha y usuaria que los marca. No representa entrega verificada.
+- `push_subscriptions`: dispositivos por salón y usuaria, con endpoint único y claves Web Push.
+- `daily_runs`: una preparación por salón y día; la marca se confirma junto con tareas y resumen.
 - `reviews`: una reseña por cita completada, con publicación explícita.
 
 Las fechas se almacenan como `timestamptz`; horarios se interpretan siempre con `America/Bogota` (UTC−05). Se reservan intervalos `[inicio, fin + limpieza)`. La migración `0001_booking_guards.sql` crea una restricción `EXCLUDE USING gist` sobre salón, profesional y rango: no depende de que dos navegadores consulten la disponibilidad a tiempo.
@@ -90,6 +98,8 @@ Las fechas se almacenan como `timestamptz`; horarios se interpretan siempre con 
 /panel/servicios           Solo dueña
 /panel/equipo              Solo dueña
 /panel/mensajes            Solo dueña
+/panel/pendientes          Solo dueña
+/panel/notificaciones      Dueña y profesional
 /panel/configuracion      Solo dueña
 /superadmin               Solo administradora global
 ```
@@ -104,4 +114,6 @@ La atomicidad cubre cita, detalle de servicios y cola. El envío al proveedor su
 
 El sandbox usa un generador determinista respecto al día actual y no escribe datos. El mismo generador alimenta el seed opcional. No hay cuentas de demo con contraseñas compartidas en producción.
 
-Fase 2 y Fase 3 no se activan automáticamente. El endpoint diario responde que las campañas no están habilitadas hasta aprobar esa fase.
+La ampliación solicitada habilita mantenimiento, reactivación y cumpleaños como tareas manuales con consentimiento. No envía WhatsApp automáticamente. Pagos, puntos, referidos, lista de espera y proveedor API premium permanecen fuera del alcance.
+
+La PWA usa el manifest nativo de Next.js y un service worker pequeño. Solo almacena la pantalla pública sin conexión; la agenda y las respuestas privadas siempre requieren red. La cola envía Web Push tras comprobar de nuevo la membresía y la profesional asignada, sin datos de clientas en la pantalla bloqueada.

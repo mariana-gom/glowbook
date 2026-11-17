@@ -11,10 +11,12 @@ export function AppointmentEmail({
   salon,
   text,
   url,
+  team = false,
 }: {
   salon: string;
   text: string;
   url: string;
+  team?: boolean;
 }) {
   return (
     <Html lang="es">
@@ -24,11 +26,19 @@ export function AppointmentEmail({
           <Heading style={{ color: "#754c60", fontFamily: "Georgia" }}>
             {salon}
           </Heading>
-          <Text style={{ lineHeight: "26px" }}>{text}</Text>
-          <Link href={url}>Gestionar mi cita y compartir mi experiencia</Link>
+          <Text style={{ lineHeight: "26px", whiteSpace: "pre-line" }}>
+            {text}
+          </Text>
+          <Link href={url}>
+            {team
+              ? "Abrir mi agenda"
+              : "Gestionar mi cita y compartir mi experiencia"}
+          </Link>
           <Text style={{ fontSize: 11, color: "#80767a" }}>
-            Este enlace es privado. Recibes este mensaje porque reservaste una
-            cita en {salon}.
+            {team
+              ? "Notificación de tu salón. Inicia sesión para consultar la agenda de"
+              : "Este enlace es privado. Recibes este mensaje porque reservaste una cita en"}{" "}
+            {salon}.
           </Text>
         </Container>
       </Body>

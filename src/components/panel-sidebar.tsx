@@ -4,6 +4,8 @@ import { usePathname } from "next/navigation";
 import {
   ArrowUpRight,
   CalendarDays,
+  Bell,
+  ListChecks,
   ChevronDown,
   Flower2,
   Heart,
@@ -36,8 +38,14 @@ export function PanelSidebar({
     { href: "/panel", label: "Vista general", icon: LayoutDashboard },
     { href: "/panel/agenda", label: "Mi agenda", icon: CalendarDays },
     { href: "/panel/clientas", label: "Clientas", icon: Heart },
+    { href: "/panel/notificaciones", label: "Mi aplicación", icon: Bell },
     ...(role === "owner"
       ? [
+          {
+            href: "/panel/pendientes",
+            label: "Pendientes de hoy",
+            icon: ListChecks,
+          },
           { href: "/panel/servicios", label: "Servicios", icon: Scissors },
           { href: "/panel/equipo", label: "Mi equipo", icon: Users },
           { href: "/panel/mensajes", label: "Mensajes", icon: MessageSquare },
@@ -61,7 +69,7 @@ export function PanelSidebar({
         />
       )}
       <aside
-        className={`fixed inset-y-0 left-0 z-40 flex w-[228px] flex-col border-r border-border bg-[#f6f2ed] px-5 py-8 transition-transform lg:translate-x-0 ${open ? "translate-x-0" : "-translate-x-full"}`}
+        className={`fixed inset-y-0 left-0 z-40 flex w-[228px] flex-col overflow-y-auto border-r border-border bg-[#f6f2ed] px-5 py-8 transition-transform lg:translate-x-0 ${open ? "translate-x-0" : "-translate-x-full"}`}
       >
         <div className="mb-9 px-2">
           <Brand />

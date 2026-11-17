@@ -3,6 +3,7 @@ import { tenant } from "@/db/tenant";
 import { scheduledMessages } from "@/db/schema";
 import { desc } from "drizzle-orm";
 import { panelData } from "@/lib/panel-data";
+import { defaultWhatsAppMessages, whatsappLabels } from "@/lib/whatsapp";
 import { ActionForm } from "@/components/action-form";
 import { clock, prettyDate } from "@/lib/utils";
 export default async function Messages() {
@@ -23,67 +24,76 @@ export default async function Messages() {
   }
   return (
     <>
-      <p className="eyebrow text-primary">CADA DETALLE, A TIEMPO</p>
-      <h1 className="text-4xl">Mensajes con tu voz.</h1>
-      <p className="mb-8 text-sm muted">
-        Los cambios aplican a las próximas reservas. Las citas ya creadas
-        conservan sus mensajes programados.
+      <p className="eyebrow text-primary">TU VOZ, EN CADA DETALLE</p>
+      <h1 className="text-4xl">Mensajes sin complicaciones.</h1>
+      <p className="mb-6 text-sm muted">
+        WhatsApp abre un chat con el texto preparado. Solo los correos y las
+        notificaciones push se envían automáticamente.
       </p>
       <section className="card mb-6 p-6">
-        <h2 className="text-2xl">Plantillas de la Fase 1</h2>
-        <p className="mb-6 text-xs muted">
-          Variables disponibles: {"{nombre}"}, {"{salon}"}, {"{fecha}"},{" "}
-          {"{enlace}"}. Para Meta, configura una plantilla aprobada con dos
-          parámetros de cuerpo: texto y enlace.
+        <h2 className="text-2xl">Plantillas de tu salón</h2>
+        <p className="mb-6 rounded-xl bg-muted p-4 text-xs">
+          Variables: {"{nombre}"}, {"{servicio}"}, {"{fecha}"}, {"{hora}"},{" "}
+          {"{profesional}"}, {"{codigo}"}, {"{enlace_reprogramar}"}. También
+          puedes usar {"{salon}"} y el alias {"{enlace}"}. El enlace de
+          agradecimiento permite dejar una reseña.
         </p>
         <ActionForm kind="messages">
-          {[
-            ["confirmation", "Confirmación"],
-            ["reminder24", "Recordatorio 24 horas"],
-            ["reminder2", "Recordatorio 2 horas"],
-            ["thanks", "Agradecimiento y reseña"],
-          ].map(([key, label]) => (
-            <fieldset
-              key={key}
-              className="space-y-4 rounded-xl border border-border p-5"
-            >
-              <legend className="px-2 text-sm">{label}</legend>
-              <label>
-                Texto del mensaje
-                <textarea
-                  name={key}
-                  defaultValue={
-                    d.salon.settings.messages[
-                      key as keyof typeof d.salon.settings.messages
-                    ]
-                  }
-                  required
-                  maxLength={1500}
-                />
-              </label>
-              <label>
-                Nombre de plantilla aprobada en Meta
-                <input
-                  name={`template-${key}`}
-                  defaultValue={
-                    d.salon.settings.whatsappTemplates[
-                      key as keyof typeof d.salon.settings.whatsappTemplates
-                    ] ?? ""
-                  }
-                  placeholder="ejemplo: recordatorio_cita"
-                  pattern="[a-z0-9_]+"
-                />
-              </label>
-            </fieldset>
+          <h3 className="serif text-2xl">WhatsApp · envío manual</h3>
+          {(
+            Object.keys(
+              defaultWhatsAppMessages,
+            ) as (keyof typeof defaultWhatsAppMessages)[]
+          ).map((key) => (
+            <label key={key}>
+              {whatsappLabels[key]}
+              <textarea
+                name={`wa-${key}`}
+                defaultValue={
+                  {
+                    ...defaultWhatsAppMessages,
+                    ...d.salon.settings.whatsappMessages,
+                  }[key]
+                }
+                maxLength={1500}
+                required
+              />
+            </label>
           ))}
+          <h3 className="serif pt-6 text-2xl">
+            Correos automáticos a tus clientas
+          </h3>
+          {(
+            [
+              ["confirmation", "Confirmación de reserva"],
+              ["reminder24", "Recordatorio del día anterior"],
+              ["thanks", "Agradecimiento y reseña"],
+            ] as const
+          ).map(([key, label]) => (
+            <label key={key}>
+              {label}
+              <textarea
+                name={key}
+                defaultValue={d.salon.settings.messages[key]}
+                maxLength={1500}
+                required
+              />
+            </label>
+          ))}
+          <p className="text-xs muted">
+            Los cambios de WhatsApp aplican al próximo toque. Los correos que ya
+            están en cola conservan su texto. El resumen diario sale en el lote
+            de las 07:00, hora de Colombia.
+          </p>
         </ActionForm>
       </section>
       <section className="card overflow-hidden">
         <div className="p-6">
-          <h2 className="text-2xl">Cola de envíos</h2>
+          <h2 className="text-2xl">Cola automática</h2>
           <p className="mb-0 text-xs muted">
-            Últimos 100 mensajes. Los resultados inciertos requieren revisar el
-            proveedor antes de marcarlos como enviados o descartarlos.
+            Últimos 100 correos y notificaciones. “Enviado” significa aceptación
+            por el proveedor, no lectura. Los casos inciertos requieren
+            revisión.
           </p>
         </div>
         <div className="overflow-x-auto">
@@ -100,7 +110,7 @@ export default async function Messages() {
             <tbody>
               {rows.map((r) => (
                 <tr key={r.id}>
-                  <td className="text-[11px]">
+                  <td className="text-xs">
                     {prettyDate(r.scheduledAt)}
                     <br />
                     {clock(r.scheduledAt)}
@@ -110,7 +120,7 @@ export default async function Messages() {
                     <br />
                     <span className="muted">{r.payload.name}</span>
                   </td>
-                  <td className="text-xs">{r.channel}</td>
+                  <td>{r.channel}</td>
                   <td className="text-xs">
                     {r.status} · {r.attempts} intentos
                   </td>
@@ -124,8 +134,10 @@ export default async function Messages() {
                         className="mt-3 space-y-2"
                       >
                         <select name="status">
-                          <option value="cancelled">Descartar envío</option>
-                          <option value="sent">Ya enviado (verificado)</option>
+                          <option value="cancelled">Descartar</option>
+                          <option value="sent">
+                            Aceptado por el proveedor (verificado)
+                          </option>
                         </select>
                       </ActionForm>
                     )}
@@ -136,8 +148,8 @@ export default async function Messages() {
                 <tr>
                   <td colSpan={5} className="py-10 text-center text-sm muted">
                     {d.demo
-                      ? "Los mensajes del demo no se envían."
-                      : "Aquí aparecerán los mensajes al recibir nuevas reservas."}
+                      ? "El demo no envía correos ni notificaciones reales."
+                      : "Los avisos aparecerán aquí cuando recibas reservas."}
                   </td>
                 </tr>
               )}

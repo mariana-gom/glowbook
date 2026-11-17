@@ -3,6 +3,7 @@ import Image from "next/image";
 import { Clock3 } from "lucide-react";
 import type { SalonData } from "@/lib/demo";
 import { clock, money, prettyDate } from "@/lib/utils";
+import { WhatsAppAction } from "./whatsapp-action";
 import { ActionForm } from "./action-form";
 export function AppointmentTable({
   data,
@@ -99,7 +100,9 @@ export function AppointmentTable({
                     <span className="size-1 rounded-full bg-current" />
                     {
                       {
-                        confirmed: "Confirmada",
+                        confirmed: a.ownerConfirmedAt
+                          ? "Confirmada"
+                          : "Por confirmar",
                         completed: "Completada",
                         cancelled: "Cancelada",
                         no_show: "No asistió",
@@ -109,6 +112,30 @@ export function AppointmentTable({
                 </td>
                 {actions && (
                   <td>
+                    <div className="mb-3 flex flex-wrap gap-2">
+                      {a.status === "confirmed" && (
+                        <>
+                          <WhatsAppAction
+                            input={{
+                              appointmentId: a.id,
+                              kind: "confirmation",
+                            }}
+                            label="Confirmar"
+                            marked={Boolean(a.ownerConfirmedAt)}
+                          />
+                          <WhatsAppAction
+                            input={{ appointmentId: a.id, kind: "reminder24" }}
+                            label="Recordar"
+                          />
+                        </>
+                      )}
+                      {a.status === "completed" && (
+                        <WhatsAppAction
+                          input={{ appointmentId: a.id, kind: "thanks" }}
+                          label="Agradecer y pedir reseña"
+                        />
+                      )}
+                    </div>
                     {a.status === "confirmed" && (
                       <ActionForm
                         kind="status"
